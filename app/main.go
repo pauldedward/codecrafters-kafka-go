@@ -21,9 +21,20 @@ func main() {
 			fmt.Println("Failed to accept connection")
 			continue
 		}
-		response := []byte{0, 0, 0, 10, 0, 0, 0, 7}
-		conn.Write(response)
-		conn.Close()
+		go handleConnection(conn)
 	}
+}
+
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	message := make([]byte, 1024)
+	_, err := conn.Read(message)
+	if err != nil {
+		fmt.Println("Failed to read message")
+		return
+	}
+	conn.Write([]byte{0, 0, 0, 4})
+	conn.Write(message[8:12])
 
 }
