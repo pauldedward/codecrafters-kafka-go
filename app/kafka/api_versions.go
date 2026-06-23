@@ -30,9 +30,9 @@ func HandleAPIVersions(requestHeader RequestHeader, decoder *protocol.Decoder) (
 	encoder.Int16(18)                                                // api_key: 18 (ApiVersions)
 	encoder.Int16(supportedAPIVersions[0])                           // min_version: 0
 	encoder.Int16(supportedAPIVersions[len(supportedAPIVersions)-1]) // max_version: 4
-	encoder.Uint8(0)                                                 // TAG_BUFFER: empty
+	encoder.Int8(0)                                                  // TAG_BUFFER: empty
 	encoder.Int32(0)                                                 // throttle_time_ms: 0
-	encoder.Uint8(0)                                                 // TAG_BUFFER: empty
+	encoder.Int8(0)                                                  // TAG_BUFFER: empty
 
 	messageBytes := encoder.GetBytes()
 	binary.BigEndian.PutUint32(messageBytes[0:4], uint32(len(messageBytes)-4))

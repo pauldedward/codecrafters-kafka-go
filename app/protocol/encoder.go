@@ -25,6 +25,10 @@ func (e *Encoder) Uint8(value uint8) {
 	e.buffer.WriteByte(value)
 }
 
+func (e *Encoder) Int8(value int8) {
+	binary.Write(&e.buffer, binary.BigEndian, value)
+}
+
 func (e *Encoder) Bytes(data []byte) {
 	e.buffer.Write(data)
 }
