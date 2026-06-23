@@ -26,7 +26,7 @@ func HandleAPIVersions(requestHeader RequestHeader, decoder *protocol.Decoder) (
 	} else {
 		encoder.Int16(0) // error_code: NO_ERROR
 	}
-	encoder.Uint8(1)                                                 // api_keys array length: 1 element
+	encoder.Int32(2)                                                 // api_keys array length: 1 element
 	encoder.Int16(18)                                                // api_key: 18 (ApiVersions)
 	encoder.Int16(supportedAPIVersions[0])                           // min_version: 0
 	encoder.Int16(supportedAPIVersions[len(supportedAPIVersions)-1]) // max_version: 4
