@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 
@@ -13,13 +14,25 @@ func HandleConnection(conn net.Conn) {
 
 	for {
 
-		_, err := decoder.Int32()
+		messageLength, err := decoder.Int32()
 		if err != nil {
 			fmt.Println("Failed to read message length")
 			return
 		}
 
-		requestHeader, err := ParseHeader(decoder)
+		if messageLength < 0 {
+			fmt.Println("Invalid message length")
+			return
+		}
+
+		requestBytes, err := decoder.Bytes(int(messageLength))
+		if err != nil {
+			fmt.Println("Failed to read request bytes")
+			return
+		}
+
+		requestDecoder := protocol.NewDecoder(bytes.NewReader(requestBytes))
+		requestHeader, err := ParseHeader(requestDecoder)
 		if err != nil {
 			fmt.Println("Failed to parse request header:", err)
 			return
