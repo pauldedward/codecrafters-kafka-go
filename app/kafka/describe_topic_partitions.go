@@ -60,7 +60,7 @@ func HandleDescribeTopicPartitions(requestHeader RequestHeader, decoder *protoco
 		//16 byte UUID for topic_id
 		encoder.Bytes(make([]byte, 16)) // Placeholder for topic_id
 		encoder.Uint8(0)                // is_internal: false
-		encoder.Int32(0)                // partitions array length
+		encoder.Uint8(0)                // partitions array length
 		encoder.Int32(0)                // topic_authorized_operations
 		encoder.Uint8(0)                // TAG_BUFFER: empty
 	}
