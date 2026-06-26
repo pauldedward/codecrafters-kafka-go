@@ -38,6 +38,6 @@ func (e *Encoder) GetBytes() []byte {
 }
 
 func (e *Encoder) String(value string) {
-	e.Uint8(uint8(len(value)))
+	e.Uint8(uint8(len(value) + 1))
 	e.buffer.WriteString(value)
 }

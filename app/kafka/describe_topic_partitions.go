@@ -26,7 +26,7 @@ func HandleDescribeTopicPartitions(requestHeader RequestHeader, decoder *protoco
 		if err != nil {
 			return nil, err
 		}
-		topicName, err := decoder.String(int(topicNameLength))
+		topicName, err := decoder.String(int(topicNameLength - 1))
 		if err != nil {
 			return nil, err
 		}
