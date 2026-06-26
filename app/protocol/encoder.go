@@ -36,3 +36,8 @@ func (e *Encoder) Bytes(data []byte) {
 func (e *Encoder) GetBytes() []byte {
 	return e.buffer.Bytes()
 }
+
+func (e *Encoder) String(value string) {
+	e.Uint8(uint8(len(value)))
+	e.buffer.WriteString(value)
+}

@@ -36,3 +36,9 @@ func (d *Decoder) Bytes(n int) ([]byte, error) {
 	_, err := io.ReadFull(d.reader, buf)
 	return buf, err
 }
+
+func (d *Decoder) String(n int) (string, error) {
+	buf := make([]byte, n)
+	_, err := io.ReadFull(d.reader, buf)
+	return string(buf), err
+}
