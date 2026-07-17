@@ -77,10 +77,6 @@ func HandleDescribeTopicPartitions(requestHeader RequestHeader, decoder *protoco
 	}
 	//request parsing ended
 
-	//write response
-	//Topic array length
-	encoder.Uint8(uint8(len(topicNames) + 1))
-
 	HandleTopicResponse(encoder, topicNames)
 
 	messageBytes := encoder.GetBytes()
@@ -128,9 +124,9 @@ func HandleTopicResponse(encoder *protocol.Encoder, topicNames []string) {
 				encoder.Int32(isr)
 			}
 
-			encoder.Uint8(1) // eligible_leader_replicas: 0 elements (empty)
-			encoder.Uint8(1) // last_known_elr: 0 elements (empty)
-			encoder.Uint8(1) // offline_replicas: 0 elements (empty)
+			encoder.Uint8(1) // eligible_leader_replicas:
+			encoder.Uint8(1) // last_known_elr:
+			encoder.Uint8(1) // offline_replicas:
 			encoder.Uint8(0) // TAG_BUFFER: empty
 		}
 
