@@ -4,10 +4,11 @@ import (
 	protocol "github.com/codecrafters-io/kafka-starter-go/app/protocol"
 )
 
-var supportedAPIs = []int16{18, 75} // Supported APIs
+var supportedAPIs = []int16{18, 75, 1} // Supported APIs
 var supportedAPIVersionMap = map[int16][2]int16{
 	18: {0, 4},
 	75: {0, 2},
+	1:  {0, 16},
 }
 
 func HandleSupportedVersions(requestHeader RequestHeader, encoder *protocol.Encoder) {
