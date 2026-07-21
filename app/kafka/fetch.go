@@ -12,6 +12,7 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 	encoder.Int32(requestHeader.CorrelationID) // correlation_id
 	encoder.Uint8(0)                           // TAG_BUFFER: empty (response header v1)
 	encoder.Int32(0)                           // throttle_time_ms
+	encoder.Int16(0)                           // error_code: 0 (no error)
 	encoder.Uint8(1)                           // responses compact array: 0 elements
 	encoder.Uint8(0)                           // TAG_BUFFER: empty (response body)
 	messageBytes := encoder.GetBytes()
