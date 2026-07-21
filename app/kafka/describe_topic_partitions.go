@@ -2,6 +2,7 @@ package kafka
 
 import (
 	binary "encoding/binary"
+	"sort"
 
 	protocol "github.com/codecrafters-io/kafka-starter-go/app/protocol"
 )
@@ -85,13 +86,23 @@ func HandleDescribeTopicPartitions(requestHeader RequestHeader, decoder *protoco
 	return messageBytes, nil
 }
 
+func SortTopicNames(topicNames []string) []string {
+	//sort alphabetically to ensure consistent ordering in the response
+	sortedTopicNames := make([]string, len(topicNames))
+	copy(sortedTopicNames, topicNames)
+	sort.Strings(sortedTopicNames)
+	return sortedTopicNames
+}
+
 func HandleTopicResponse(encoder *protocol.Encoder, topicNames []string) {
 
 	clusterMetaData, _ := GetClusterMetadataFromFile("/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log")
 
 	encoder.Uint8(uint8(len(topicNames) + 1)) // topics array length
 
-	for _, topicName := range topicNames {
+	//sort topic names to ensure consistent ordering in the response
+	sortedTopicNames := SortTopicNames(topicNames)
+	for _, topicName := range sortedTopicNames {
 		topic, found := clusterMetaData.TopicsByName[topicName]
 		if !found {
 			encoder.Int16(3)                // error_code
