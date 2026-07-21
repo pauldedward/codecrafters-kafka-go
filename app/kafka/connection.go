@@ -63,6 +63,17 @@ func HandleConnection(conn net.Conn) {
 				fmt.Println("Failed to send response:", err)
 				return
 			}
+		case 1: // Fetch
+			response, err := HandleFetch(requestHeader, requestDecoder)
+			if err != nil {
+				fmt.Println("Failed to handle Fetch:", err)
+				return
+			}
+			_, err = conn.Write(response)
+			if err != nil {
+				fmt.Println("Failed to send response:", err)
+				return
+			}
 		}
 
 	}
