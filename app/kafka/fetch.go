@@ -246,7 +246,11 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 	if err != nil {
 		return nil, err
 	}
-
+	//get cluster metadata
+	clusterMetaData, err := GetClusterMetadataFromFile("/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log")
+	if err != nil {
+		return nil, err
+	}
 	encoder := protocol.NewEncoder()
 	encoder.Int32(0)                           // placeholder for message length
 	encoder.Int32(requestHeader.CorrelationID) // correlation_id
@@ -259,16 +263,23 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 	for _, topic := range fetchRequestBody.Topics {
 		encoder.Bytes(topic.TopicId)
 		encoder.Uint8(uint8(len(topic.Partitions)) + 1)
+		var topicID [16]byte
+		copy(topicID[:], topic.TopicId)
 		for _, partition := range topic.Partitions {
 			encoder.Int32(partition.Partition)
-			encoder.Int16(100) // UNKNOWN_TOPIC_ID
-			encoder.Int64(0)   // high_watermark
-			encoder.Int64(0)   // last_stable_offset
-			encoder.Int64(0)   // log_start_offset
-			encoder.Uint8(1)   // aborted_transactions: empty compact array
-			encoder.Int32(-1)  // preferred_read_replica
-			encoder.Uint8(0)   // records: null compact records
-			encoder.Uint8(0)   // tagged fields
+			//if the topic id is not found in the cluster metadata, return UNKNOWN_TOPIC_ID error code
+			if _, ok := clusterMetaData.TopicsByID[topicID]; !ok {
+				encoder.Int16(100) // UNKNOWN_TOPIC_ID
+			} else {
+				encoder.Int16(0) // no error
+			}
+			encoder.Int64(0)  // high_watermark
+			encoder.Int64(0)  // last_stable_offset
+			encoder.Int64(0)  // log_start_offset
+			encoder.Uint8(1)  // aborted_transactions: empty compact array
+			encoder.Int32(-1) // preferred_read_replica
+			encoder.Uint8(0)  // records: null compact records
+			encoder.Uint8(0)  // tagged fields
 		}
 		encoder.Uint8(0) // topic tagged fields
 	}
