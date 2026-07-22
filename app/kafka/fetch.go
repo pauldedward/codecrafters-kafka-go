@@ -272,8 +272,6 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 		}
 		encoder.Uint8(0) // topic tagged fields
 	}
-	encoder.Uint8(1) // node_endpoints: empty compact array
-
 	encoder.Uint8(0) // TAG_BUFFER: empty (response body)
 	messageBytes := encoder.GetBytes()
 	binary.BigEndian.PutUint32(messageBytes[0:4], uint32(len(messageBytes)-4))
