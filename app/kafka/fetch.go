@@ -7,91 +7,117 @@ import (
 )
 
 type FetchRequestBody struct {
-	ReplicaID   int32
-	MaxWaitTime int32
-	MinBytes    int32
-	Topics      []FetchTopic
+	MaxWaitMs           int32
+	MinBytes            int32
+	MaxBytes            int32
+	IsolationLevel      int8
+	SessionID           int32
+	SessionEpoch        int32
+	Topics              []FetchTopic
+	ForgottenTopicsData []ForgottenTopicData
+	RackId              string
+	ClusterId           string
+	ReplicaStates       []ReplicaState
 }
 
+type ReplicaState struct {
+	ReplicaId    int32
+	ReplicaEpoch int64
+}
+
+type ForgottenTopicData struct {
+	TopicId    string
+	Partitions []int32
+}
 type FetchTopic struct {
-	Name       string
+	TopicId    string
 	Partitions []FetchPartition
 }
 
 type FetchPartition struct {
-	Partition      int32
-	Offset         int64
-	logStartOffset int64
-	MaxBytes       int32
+	Partition          int32
+	CurrentLeaderEpoch int32
+	FetchOffset        int64
+	LastFetchedEpoch   int32
+	LogStartOffset     int64
+	PartitionMaxBytes  int32
+}
+
+func parseFetchPartition(decoder *protocol.Decoder) FetchPartition {
+	return FetchPartition{
+		Partition:          func() int32 { v, _ := decoder.Int32(); return v }(),
+		CurrentLeaderEpoch: func() int32 { v, _ := decoder.Int32(); return v }(),
+		FetchOffset:        func() int64 { v, _ := decoder.Int64(); return v }(),
+		LastFetchedEpoch:   func() int32 { v, _ := decoder.Int32(); return v }(),
+		LogStartOffset:     func() int64 { v, _ := decoder.Int64(); return v }(),
+		PartitionMaxBytes:  func() int32 { v, _ := decoder.Int32(); return v }(),
+	}
+}
+
+func parseFetchPartitions(decoder *protocol.Decoder) []FetchPartition {
+	partitionCount, _ := decoder.Int32()
+	partitions := make([]FetchPartition, partitionCount)
+	for i := 0; i < int(partitionCount); i++ {
+		partitions[i] = parseFetchPartition(decoder)
+	}
+	return partitions
+}
+
+func parseFetchTopic(decoder *protocol.Decoder) FetchTopic {
+	return FetchTopic{
+		TopicId:    func() string { v, _ := decoder.CompactString(); return v }(),
+		Partitions: parseFetchPartitions(decoder),
+	}
+}
+
+func parseFetchTopics(decoder *protocol.Decoder) []FetchTopic {
+	topicCount, _ := decoder.Int32()
+	topics := make([]FetchTopic, topicCount)
+	for i := 0; i < int(topicCount); i++ {
+		topics[i] = parseFetchTopic(decoder)
+	}
+	return topics
+}
+
+func parseForgottenTopicData(decoder *protocol.Decoder) []ForgottenTopicData {
+	topicCount, _ := decoder.Int32()
+	forgottenTopics := make([]ForgottenTopicData, topicCount)
+	for i := 0; i < int(topicCount); i++ {
+		forgottenTopics[i] = ForgottenTopicData{
+			TopicId:    func() string { v, _ := decoder.CompactString(); return v }(),
+			Partitions: func() []int32 { v, _ := decoder.CompactInt32Array(); return v }(),
+		}
+	}
+	return forgottenTopics
+}
+
+func parseReplicaStates(decoder *protocol.Decoder) []ReplicaState {
+	replicaCount, _ := decoder.Int32()
+	replicas := make([]ReplicaState, replicaCount)
+	for i := 0; i < int(replicaCount); i++ {
+		replicas[i] = ReplicaState{
+			ReplicaId:    func() int32 { v, _ := decoder.Int32(); return v }(),
+			ReplicaEpoch: func() int64 { v, _ := decoder.Int64(); return v }(),
+		}
+	}
+	return replicas
 }
 
 func parseFetchRequestBody(decoder *protocol.Decoder) (FetchRequestBody, error) {
-	replicaID, err := decoder.Int32()
-	if err != nil {
-		return FetchRequestBody{}, err
-	}
-	maxWaitTime, err := decoder.Int32()
-	if err != nil {
-		return FetchRequestBody{}, err
-	}
-	minBytes, err := decoder.Int32()
-	if err != nil {
-		return FetchRequestBody{}, err
-	}
-	topicsLength, err := decoder.Int32()
-	if err != nil {
-		return FetchRequestBody{}, err
-	}
-	topics := make([]FetchTopic, topicsLength)
-	for i := int32(0); i < topicsLength; i++ {
-		topicNameLength, err := decoder.Int16()
-		if err != nil {
-			return FetchRequestBody{}, err
-		}
-		topicName, err := decoder.String(int(topicNameLength))
-		if err != nil {
-			return FetchRequestBody{}, err
-		}
-		partitionsLength, err := decoder.Int32()
-		if err != nil {
-			return FetchRequestBody{}, err
-		}
-		partitions := make([]FetchPartition, partitionsLength)
-		for j := int32(0); j < partitionsLength; j++ {
-			partition, err := decoder.Int32()
-			if err != nil {
-				return FetchRequestBody{}, err
-			}
-			offset, err := decoder.Int64()
-			if err != nil {
-				return FetchRequestBody{}, err
-			}
-			logStartOffset, err := decoder.Int64()
-			if err != nil {
-				return FetchRequestBody{}, err
-			}
-			maxBytes, err := decoder.Int32()
-			if err != nil {
-				return FetchRequestBody{}, err
-			}
-			partitions[j] = FetchPartition{
-				Partition:      partition,
-				Offset:         offset,
-				logStartOffset: logStartOffset,
-				MaxBytes:       maxBytes,
-			}
-		}
-		topics[i] = FetchTopic{
-			Name:       topicName,
-			Partitions: partitions,
-		}
-	}
-	return FetchRequestBody{
-		ReplicaID:   replicaID,
-		MaxWaitTime: maxWaitTime,
-		MinBytes:    minBytes,
-		Topics:      topics,
-	}, nil
+	//version 16
+	fetchRequestBody := FetchRequestBody{}
+	fetchRequestBody.MaxWaitMs, _ = decoder.Int32()
+	fetchRequestBody.MinBytes, _ = decoder.Int32()
+	fetchRequestBody.MaxBytes, _ = decoder.Int32()
+	fetchRequestBody.IsolationLevel, _ = decoder.Int8()
+	fetchRequestBody.SessionID, _ = decoder.Int32()
+	fetchRequestBody.SessionEpoch, _ = decoder.Int32()
+	fetchRequestBody.Topics = parseFetchTopics(decoder)
+	fetchRequestBody.ForgottenTopicsData = parseForgottenTopicData(decoder)
+	fetchRequestBody.RackId, _ = decoder.CompactString()
+	fetchRequestBody.ClusterId, _ = decoder.CompactString()
+	fetchRequestBody.ReplicaStates = parseReplicaStates(decoder)
+	return fetchRequestBody, nil
 }
 
 func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte, error) {
@@ -100,10 +126,7 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 	if err != nil {
 		return nil, err
 	}
-	topicNames := make([]string, len(fetchRequestBody.Topics))
-	for i, topic := range fetchRequestBody.Topics {
-		topicNames[i] = topic.Name
-	}
+
 	encoder := protocol.NewEncoder()
 	encoder.Int32(0)                           // placeholder for message length
 	encoder.Int32(requestHeader.CorrelationID) // correlation_id
@@ -112,9 +135,10 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 	encoder.Int16(0)                           // error_code: 0 (no error)
 	encoder.Int32(0)                           // session_id
 	//replase empty compact array with a compact array of 1 element
-	encoder.Uint8(uint8(len(topicNames) + 1)) // topics array length
-	for _, topicName := range topicNames {
-		encoder.String(topicName)
+	// topics array length
+	encoder.Uint8(uint8(len(fetchRequestBody.Topics)))
+	for _, topic := range fetchRequestBody.Topics {
+		encoder.String(topic.TopicId)
 		encoder.Uint8(2)
 		encoder.Int32(0)
 		encoder.Int32(100)
