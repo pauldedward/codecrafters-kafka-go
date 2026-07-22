@@ -16,8 +16,6 @@ type FetchRequestBody struct {
 	Topics              []FetchTopic
 	ForgottenTopicsData []ForgottenTopicData
 	RackId              string
-	ClusterId           string
-	ReplicaStates       []ReplicaState
 }
 
 type ReplicaState struct {
@@ -26,11 +24,11 @@ type ReplicaState struct {
 }
 
 type ForgottenTopicData struct {
-	TopicId    string
+	TopicId    []byte
 	Partitions []int32
 }
 type FetchTopic struct {
-	TopicId    string
+	TopicId    []byte
 	Partitions []FetchPartition
 }
 
@@ -43,80 +41,202 @@ type FetchPartition struct {
 	PartitionMaxBytes  int32
 }
 
-func parseFetchPartition(decoder *protocol.Decoder) FetchPartition {
+func parseFetchPartition(decoder *protocol.Decoder) (FetchPartition, error) {
+	partition, err := decoder.Int32()
+	if err != nil {
+		return FetchPartition{}, err
+	}
+	currentLeaderEpoch, err := decoder.Int32()
+	if err != nil {
+		return FetchPartition{}, err
+	}
+	fetchOffset, err := decoder.Int64()
+	if err != nil {
+		return FetchPartition{}, err
+	}
+	lastFetchedEpoch, err := decoder.Int32()
+	if err != nil {
+		return FetchPartition{}, err
+	}
+	logStartOffset, err := decoder.Int64()
+	if err != nil {
+		return FetchPartition{}, err
+	}
+	partitionMaxBytes, err := decoder.Int32()
+	if err != nil {
+		return FetchPartition{}, err
+	}
+	if err := skipTaggedFields(decoder); err != nil {
+		return FetchPartition{}, err
+	}
+
 	return FetchPartition{
-		Partition:          func() int32 { v, _ := decoder.Int32(); return v }(),
-		CurrentLeaderEpoch: func() int32 { v, _ := decoder.Int32(); return v }(),
-		FetchOffset:        func() int64 { v, _ := decoder.Int64(); return v }(),
-		LastFetchedEpoch:   func() int32 { v, _ := decoder.Int32(); return v }(),
-		LogStartOffset:     func() int64 { v, _ := decoder.Int64(); return v }(),
-		PartitionMaxBytes:  func() int32 { v, _ := decoder.Int32(); return v }(),
-	}
+		Partition:          partition,
+		CurrentLeaderEpoch: currentLeaderEpoch,
+		FetchOffset:        fetchOffset,
+		LastFetchedEpoch:   lastFetchedEpoch,
+		LogStartOffset:     logStartOffset,
+		PartitionMaxBytes:  partitionMaxBytes,
+	}, nil
 }
 
-func parseFetchPartitions(decoder *protocol.Decoder) []FetchPartition {
-	partitionCount, _ := decoder.VarUInt()
-	partitions := make([]FetchPartition, partitionCount-1)
-	for i := 0; i < int(partitionCount-1); i++ {
-		partitions[i] = parseFetchPartition(decoder)
+func parseFetchPartitions(decoder *protocol.Decoder) ([]FetchPartition, error) {
+	rawCount, err := decoder.VarUInt()
+	if err != nil {
+		return nil, err
 	}
-	return partitions
+	if rawCount == 0 {
+		return []FetchPartition{}, nil
+	}
+
+	partitionCount := int(rawCount - 1)
+	partitions := make([]FetchPartition, partitionCount)
+	for i := 0; i < partitionCount; i++ {
+		partition, err := parseFetchPartition(decoder)
+		if err != nil {
+			return nil, err
+		}
+		partitions[i] = partition
+	}
+	return partitions, nil
 }
 
-func parseFetchTopic(decoder *protocol.Decoder) FetchTopic {
-	return FetchTopic{
-		TopicId:    func() string { v, _ := decoder.CompactString(); return v }(),
-		Partitions: parseFetchPartitions(decoder),
+func parseFetchTopic(decoder *protocol.Decoder) (FetchTopic, error) {
+	topicID, err := decoder.Bytes(16)
+	if err != nil {
+		return FetchTopic{}, err
 	}
+	partitions, err := parseFetchPartitions(decoder)
+	if err != nil {
+		return FetchTopic{}, err
+	}
+	if err := skipTaggedFields(decoder); err != nil {
+		return FetchTopic{}, err
+	}
+
+	return FetchTopic{TopicId: topicID, Partitions: partitions}, nil
 }
 
-func parseFetchTopics(decoder *protocol.Decoder) []FetchTopic {
-	topicCount, _ := decoder.VarUInt()
-	topics := make([]FetchTopic, topicCount-1)
-	for i := 0; i < int(topicCount-1); i++ {
-		topics[i] = parseFetchTopic(decoder)
+func parseFetchTopics(decoder *protocol.Decoder) ([]FetchTopic, error) {
+	rawCount, err := decoder.VarUInt()
+	if err != nil {
+		return nil, err
 	}
-	return topics
+	if rawCount == 0 {
+		return []FetchTopic{}, nil
+	}
+
+	topicCount := int(rawCount - 1)
+	topics := make([]FetchTopic, topicCount)
+	for i := 0; i < topicCount; i++ {
+		topic, err := parseFetchTopic(decoder)
+		if err != nil {
+			return nil, err
+		}
+		topics[i] = topic
+	}
+	return topics, nil
 }
 
-func parseForgottenTopicData(decoder *protocol.Decoder) []ForgottenTopicData {
-	topicCount, _ := decoder.VarUInt()
-	forgottenTopics := make([]ForgottenTopicData, topicCount-1)
-	for i := 0; i < int(topicCount-1); i++ {
+func parseForgottenTopicData(decoder *protocol.Decoder) ([]ForgottenTopicData, error) {
+	rawCount, err := decoder.VarUInt()
+	if err != nil {
+		return nil, err
+	}
+	if rawCount == 0 {
+		return []ForgottenTopicData{}, nil
+	}
+
+	topicCount := int(rawCount - 1)
+	forgottenTopics := make([]ForgottenTopicData, topicCount)
+	for i := 0; i < topicCount; i++ {
+		topicID, err := decoder.Bytes(16)
+		if err != nil {
+			return nil, err
+		}
+		partitions, err := decoder.CompactInt32Array()
+		if err != nil {
+			return nil, err
+		}
+		if err := skipTaggedFields(decoder); err != nil {
+			return nil, err
+		}
+
 		forgottenTopics[i] = ForgottenTopicData{
-			TopicId:    func() string { v, _ := decoder.CompactString(); return v }(),
-			Partitions: func() []int32 { v, _ := decoder.CompactInt32Array(); return v }(),
+			TopicId:    topicID,
+			Partitions: partitions,
 		}
 	}
-	return forgottenTopics
+	return forgottenTopics, nil
 }
 
-func parseReplicaStates(decoder *protocol.Decoder) []ReplicaState {
-	replicaCount, _ := decoder.VarUInt()
-	replicas := make([]ReplicaState, replicaCount-1)
-	for i := 0; i < int(replicaCount-1); i++ {
-		replicas[i] = ReplicaState{
-			ReplicaId:    func() int32 { v, _ := decoder.Int32(); return v }(),
-			ReplicaEpoch: func() int64 { v, _ := decoder.Int64(); return v }(),
+func skipTaggedFields(decoder *protocol.Decoder) error {
+	tagCount, err := decoder.VarUInt()
+	if err != nil {
+		return err
+	}
+
+	for i := uint64(0); i < tagCount; i++ {
+		_, err := decoder.VarUInt() // tag id
+		if err != nil {
+			return err
+		}
+		size, err := decoder.VarUInt()
+		if err != nil {
+			return err
+		}
+		_, err = decoder.Bytes(int(size))
+		if err != nil {
+			return err
 		}
 	}
-	return replicas
+
+	return nil
 }
 
 func parseFetchRequestBody(decoder *protocol.Decoder) (FetchRequestBody, error) {
 	//version 16
 	fetchRequestBody := FetchRequestBody{}
-	fetchRequestBody.MaxWaitMs, _ = decoder.Int32()
-	fetchRequestBody.MinBytes, _ = decoder.Int32()
-	fetchRequestBody.MaxBytes, _ = decoder.Int32()
-	fetchRequestBody.IsolationLevel, _ = decoder.Int8()
-	fetchRequestBody.SessionID, _ = decoder.Int32()
-	fetchRequestBody.SessionEpoch, _ = decoder.Int32()
-	fetchRequestBody.Topics = parseFetchTopics(decoder)
-	fetchRequestBody.ForgottenTopicsData = parseForgottenTopicData(decoder)
-	fetchRequestBody.RackId, _ = decoder.CompactString()
-	fetchRequestBody.ClusterId, _ = decoder.CompactString()
-	fetchRequestBody.ReplicaStates = parseReplicaStates(decoder)
+	var err error
+	fetchRequestBody.MaxWaitMs, err = decoder.Int32()
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	fetchRequestBody.MinBytes, err = decoder.Int32()
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	fetchRequestBody.MaxBytes, err = decoder.Int32()
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	fetchRequestBody.IsolationLevel, err = decoder.Int8()
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	fetchRequestBody.SessionID, err = decoder.Int32()
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	fetchRequestBody.SessionEpoch, err = decoder.Int32()
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	fetchRequestBody.Topics, err = parseFetchTopics(decoder)
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	fetchRequestBody.ForgottenTopicsData, err = parseForgottenTopicData(decoder)
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	fetchRequestBody.RackId, err = decoder.CompactString()
+	if err != nil {
+		return FetchRequestBody{}, err
+	}
+	if err := skipTaggedFields(decoder); err != nil {
+		return FetchRequestBody{}, err
+	}
 	return fetchRequestBody, nil
 }
 
@@ -134,15 +254,25 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 	encoder.Int32(0)                           // throttle_time_ms
 	encoder.Int16(0)                           // error_code: 0 (no error)
 	encoder.Int32(0)                           // session_id
-	//replase empty compact array with a compact array of 1 element
-	// topics array length
+	// topics compact array length
 	encoder.Uint8(uint8(len(fetchRequestBody.Topics)) + 1)
 	for _, topic := range fetchRequestBody.Topics {
-		encoder.String(topic.TopicId)
-		encoder.Uint8(2)
-		encoder.Int32(0)
-		encoder.Int32(100)
+		encoder.Bytes(topic.TopicId)
+		encoder.Uint8(uint8(len(topic.Partitions)) + 1)
+		for _, partition := range topic.Partitions {
+			encoder.Int32(partition.Partition)
+			encoder.Int16(100) // UNKNOWN_TOPIC_ID
+			encoder.Int64(0)   // high_watermark
+			encoder.Int64(0)   // last_stable_offset
+			encoder.Int64(0)   // log_start_offset
+			encoder.Uint8(1)   // aborted_transactions: empty compact array
+			encoder.Int32(-1)  // preferred_read_replica
+			encoder.Uint8(0)   // records: null compact records
+			encoder.Uint8(0)   // tagged fields
+		}
+		encoder.Uint8(0) // topic tagged fields
 	}
+	encoder.Uint8(1) // node_endpoints: empty compact array
 
 	encoder.Uint8(0) // TAG_BUFFER: empty (response body)
 	messageBytes := encoder.GetBytes()
