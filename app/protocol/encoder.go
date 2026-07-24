@@ -45,3 +45,21 @@ func (e *Encoder) String(value string) {
 	e.Uint8(uint8(len(value) + 1))
 	e.buffer.WriteString(value)
 }
+
+func (e *Encoder) VarUInt(v uint64) {
+	for v >= 0x80 {
+		e.Uint8(uint8(v) | 0x80)
+		v >>= 7
+	}
+	e.Uint8(uint8(v))
+}
+
+func (e *Encoder) NullableCompactBytes(data []byte) {
+	if data == nil {
+		e.VarUInt(0)
+		return
+	}
+	length := len(data) + 1
+	e.Uint8(uint8(length))
+	e.buffer.Write(data)
+}
