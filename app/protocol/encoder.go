@@ -56,10 +56,9 @@ func (e *Encoder) VarUInt(v uint64) {
 
 func (e *Encoder) NullableCompactBytes(data []byte) {
 	if data == nil {
-		e.VarUInt(0)
+		e.VarUInt(0) // null
 		return
 	}
-	length := len(data) + 1
-	e.Uint8(uint8(length))
-	e.buffer.Write(data)
+	e.VarUInt(uint64(len(data) + 1))
+	e.Bytes(data)
 }
