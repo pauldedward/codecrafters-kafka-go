@@ -2,6 +2,8 @@ package kafka
 
 import (
 	binary "encoding/binary"
+	"strconv"
+	"strings"
 
 	protocol "github.com/codecrafters-io/kafka-starter-go/app/protocol"
 )
@@ -248,6 +250,8 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 	}
 	//get cluster metadata
 	clusterMetaData, err := GetClusterMetadataFromFile("/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log")
+	pathTemplate := "/tmp/kraft-combined-logs/{topic_id}-{partitionIndex}/00000000000000000000.log"
+
 	if err != nil {
 		return nil, err
 	}
@@ -266,20 +270,25 @@ func HandleFetch(requestHeader RequestHeader, decoder *protocol.Decoder) ([]byte
 		var topicID [16]byte
 		copy(topicID[:], topic.TopicId)
 		for _, partition := range topic.Partitions {
+			replacer := strings.NewReplacer("{topic_id}", string(topic.TopicId), "{partitionIndex}", strconv.Itoa(int(partition.Partition)))
+			filePath := replacer.Replace(pathTemplate)
+			recordBytes := make([]byte, 0)
 			encoder.Int32(partition.Partition)
 			//if the topic id is not found in the cluster metadata, return UNKNOWN_TOPIC_ID error code
 			if _, ok := clusterMetaData.TopicsByID[topicID]; !ok {
 				encoder.Int16(100) // UNKNOWN_TOPIC_ID
 			} else {
 				encoder.Int16(0) // no error
+				fileReader, _ := protocol.NewDecoderFromFile(filePath)
+				recordBytes, _ = fileReader.CompactBytes()
 			}
 			encoder.Int64(0)  // high_watermark
 			encoder.Int64(0)  // last_stable_offset
 			encoder.Int64(0)  // log_start_offset
 			encoder.Uint8(1)  // aborted_transactions: empty compact array
 			encoder.Int32(-1) // preferred_read_replica
-			encoder.Uint8(0)  // records: null compact records
-			encoder.Uint8(0)  // tagged fields
+			encoder.NullableCompactBytes(recordBytes)
+			encoder.Uint8(0) // tagged fields
 		}
 		encoder.Uint8(0) // topic tagged fields
 	}
